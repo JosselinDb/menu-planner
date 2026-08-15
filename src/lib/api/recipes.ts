@@ -1,8 +1,10 @@
 import { supabase } from '../supabase'
+import { deleteRecipeImageByUrl, uploadRecipeImage } from './storage'
 import { findOrCreateIngredient } from './ingredients'
 import type {
   Recipe,
   RecipeFormData,
+  RecipeImageInput,
   RecipeWithDetails,
 } from '../types'
 
@@ -40,7 +42,10 @@ export async function fetchRecipe(id: string): Promise<RecipeWithDetails> {
   return recipe
 }
 
-export async function createRecipe(form: RecipeFormData): Promise<string> {
+export async function createRecipe(
+  form: RecipeFormData,
+  image?: RecipeImageInput,
+): Promise<string> {
   const { data: recipe, error: recipeError } = await supabase
     .from('recipes')
     .insert({
@@ -56,21 +61,43 @@ export async function createRecipe(form: RecipeFormData): Promise<string> {
   if (recipeError) throw recipeError
 
   await saveRecipeRelations(recipe.id, form)
+
+  if (image?.file) {
+    const imageUrl = await uploadRecipeImage(recipe.id, image.file)
+    const { error } = await supabase
+      .from('recipes')
+      .update({ image_url: imageUrl })
+      .eq('id', recipe.id)
+    if (error) throw error
+  }
+
   return recipe.id
 }
 
-export async function updateRecipe(id: string, form: RecipeFormData): Promise<void> {
-  const { error: recipeError } = await supabase
-    .from('recipes')
-    .update({
-      name: form.name.trim(),
-      source_link: form.source_link.trim() || null,
-      prep_duration_minutes: form.prep_duration_minutes,
-      cook_duration_minutes: form.cook_duration_minutes,
-      servings: form.servings,
-    })
-    .eq('id', id)
+export async function updateRecipe(
+  id: string,
+  form: RecipeFormData,
+  image?: RecipeImageInput,
+): Promise<void> {
+  const updates: Record<string, unknown> = {
+    name: form.name.trim(),
+    source_link: form.source_link.trim() || null,
+    prep_duration_minutes: form.prep_duration_minutes,
+    cook_duration_minutes: form.cook_duration_minutes,
+    servings: form.servings,
+  }
 
+  if (image?.remove && image.currentUrl) {
+    await deleteRecipeImageByUrl(image.currentUrl)
+    updates.image_url = null
+  } else if (image?.file) {
+    if (image.currentUrl) {
+      await deleteRecipeImageByUrl(image.currentUrl)
+    }
+    updates.image_url = await uploadRecipeImage(id, image.file)
+  }
+
+  const { error: recipeError } = await supabase.from('recipes').update(updates).eq('id', id)
   if (recipeError) throw recipeError
 
   await supabase.from('recipe_ingredients').delete().eq('recipe_id', id)
@@ -79,6 +106,18 @@ export async function updateRecipe(id: string, form: RecipeFormData): Promise<vo
 }
 
 export async function deleteRecipe(id: string): Promise<void> {
+  const { data, error: fetchError } = await supabase
+    .from('recipes')
+    .select('image_url')
+    .eq('id', id)
+    .single()
+
+  if (fetchError) throw fetchError
+
+  if (data?.image_url) {
+    await deleteRecipeImageByUrl(data.image_url)
+  }
+
   const { error } = await supabase.from('recipes').delete().eq('id', id)
   if (error) throw error
 }

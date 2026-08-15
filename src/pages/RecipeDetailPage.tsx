@@ -9,6 +9,7 @@ import {
 } from '../components/Layout'
 import { deleteRecipe, fetchRecipe } from '../lib/api/recipes'
 import { isSupabaseConfigured } from '../lib/supabase'
+import { RecipeImage } from '../components/RecipeImage'
 import {
   formatDuration,
   formatQuantity,
@@ -76,6 +77,13 @@ export function RecipeDetailPage() {
           <Link to="/" className="back-link">
             ← All recipes
           </Link>
+
+          <RecipeImage
+            src={recipe.image_url}
+            alt={recipe.name}
+            variant="hero"
+            className="recipe-hero"
+          />
 
           <div className="detail-grid">
             <section className="card">

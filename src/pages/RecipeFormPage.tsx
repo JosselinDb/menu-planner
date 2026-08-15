@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Layout, Button, LoadingState, ErrorState, SetupBanner } from '../components/Layout'
 import { createRecipe, fetchRecipe, recipeToFormData, updateRecipe } from '../lib/api/recipes'
+import { validateImageFile } from '../lib/api/storage'
 import { isSupabaseConfigured } from '../lib/supabase'
+import { RecipeImage } from '../components/RecipeImage'
 import {
   INGREDIENT_CATEGORIES,
   QUANTITY_UNITS,
@@ -32,6 +34,10 @@ export function RecipeFormPage() {
   const isEdit = Boolean(id)
   const navigate = useNavigate()
   const [form, setForm] = useState<RecipeFormData>(defaultForm())
+  const [existingImageUrl, setExistingImageUrl] = useState<string | null>(null)
+  const [imageFile, setImageFile] = useState<File | null>(null)
+  const [imagePreview, setImagePreview] = useState<string | null>(null)
+  const [removeImage, setRemoveImage] = useState(false)
   const [loading, setLoading] = useState(isEdit)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -43,10 +49,47 @@ export function RecipeFormPage() {
     }
 
     fetchRecipe(id)
-      .then((recipe) => setForm(recipeToFormData(recipe)))
+      .then((recipe) => {
+        setForm(recipeToFormData(recipe))
+        setExistingImageUrl(recipe.image_url)
+      })
       .catch((err) => setError(err.message))
       .finally(() => setLoading(false))
   }, [id])
+
+  useEffect(() => {
+    if (!imageFile) {
+      setImagePreview(null)
+      return
+    }
+
+    const objectUrl = URL.createObjectURL(imageFile)
+    setImagePreview(objectUrl)
+    return () => URL.revokeObjectURL(objectUrl)
+  }, [imageFile])
+
+  function handleImageChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    const validationError = validateImageFile(file)
+    if (validationError) {
+      setError(validationError)
+      event.target.value = ''
+      return
+    }
+
+    setError(null)
+    setImageFile(file)
+    setRemoveImage(false)
+  }
+
+  function handleRemoveImage() {
+    setImageFile(null)
+    setRemoveImage(true)
+  }
+
+  const displayedImageUrl = removeImage ? null : (imagePreview ?? existingImageUrl)
 
   function updateField<K extends keyof RecipeFormData>(key: K, value: RecipeFormData[K]) {
     setForm((prev) => ({ ...prev, [key]: value }))
@@ -79,11 +122,17 @@ export function RecipeFormPage() {
     setError(null)
 
     try {
+      const imageInput = {
+        file: imageFile,
+        remove: removeImage,
+        currentUrl: existingImageUrl,
+      }
+
       if (isEdit && id) {
-        await updateRecipe(id, form)
+        await updateRecipe(id, form, imageInput)
         navigate(`/recipes/${id}`)
       } else {
-        const newId = await createRecipe(form)
+        const newId = await createRecipe(form, imageInput)
         navigate(`/recipes/${newId}`)
       }
     } catch (err) {
@@ -103,6 +152,34 @@ export function RecipeFormPage() {
           <Link to={isEdit && id ? `/recipes/${id}` : '/'} className="back-link">
             ← Cancel
           </Link>
+
+          <section className="card">
+            <h2>Photo</h2>
+            <div className="image-upload">
+              <RecipeImage
+                src={displayedImageUrl}
+                alt={form.name || 'Recipe preview'}
+                variant="form"
+              />
+              <div className="image-upload-actions">
+                <label className="btn btn-secondary image-upload-label">
+                  {displayedImageUrl ? 'Change photo' : 'Upload photo'}
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    onChange={handleImageChange}
+                    hidden
+                  />
+                </label>
+                {displayedImageUrl && (
+                  <Button type="button" variant="ghost" onClick={handleRemoveImage}>
+                    Remove photo
+                  </Button>
+                )}
+                <p className="muted image-upload-hint">JPEG, PNG, WebP or GIF · max 5 MB</p>
+              </div>
+            </div>
+          </section>
 
           <section className="card">
             <h2>Basics</h2>

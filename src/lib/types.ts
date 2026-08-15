@@ -43,8 +43,15 @@ export interface Recipe {
   prep_duration_minutes: number
   cook_duration_minutes: number
   servings: number
+  image_url: string | null
   created_at: string
   updated_at: string
+}
+
+export interface RecipeImageInput {
+  file?: File | null
+  remove?: boolean
+  currentUrl?: string | null
 }
 
 export interface RecipeIngredient {

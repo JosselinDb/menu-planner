@@ -18,6 +18,7 @@ create table if not exists recipes (
   prep_duration_minutes integer not null default 0 check (prep_duration_minutes >= 0),
   cook_duration_minutes integer not null default 0 check (cook_duration_minutes >= 0),
   servings integer not null default 4 check (servings > 0),
+  image_url text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -93,3 +94,24 @@ create policy "Public access recipe_ingredients" on recipe_ingredients for all u
 create policy "Public access recipe_instructions" on recipe_instructions for all using (true) with check (true);
 create policy "Public access shopping_list_items" on shopping_list_items for all using (true) with check (true);
 create policy "Public access menu_items" on menu_items for all using (true) with check (true);
+
+-- Recipe image storage (public bucket for personal use)
+insert into storage.buckets (id, name, public)
+values ('recipe-images', 'recipe-images', true)
+on conflict (id) do nothing;
+
+create policy "Public read recipe images"
+on storage.objects for select
+using (bucket_id = 'recipe-images');
+
+create policy "Public upload recipe images"
+on storage.objects for insert
+with check (bucket_id = 'recipe-images');
+
+create policy "Public update recipe images"
+on storage.objects for update
+using (bucket_id = 'recipe-images');
+
+create policy "Public delete recipe images"
+on storage.objects for delete
+using (bucket_id = 'recipe-images');

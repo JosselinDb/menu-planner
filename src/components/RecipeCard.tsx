@@ -1,11 +1,13 @@
 import { Link } from 'react-router-dom'
+import { RecipeImage } from './RecipeImage'
 import type { Recipe } from '../lib/types'
 import { formatDuration } from '../lib/types'
 
 export function RecipeCard({ recipe }: { recipe: Recipe }) {
   return (
     <Link to={`/recipes/${recipe.id}`} className="recipe-card">
-      <div>
+      <RecipeImage src={recipe.image_url} alt={recipe.name} variant="card" />
+      <div className="recipe-card-body">
         <h2 className="recipe-card-title">{recipe.name}</h2>
         <p className="recipe-card-meta">
           {formatDuration(recipe.prep_duration_minutes, recipe.cook_duration_minutes)}
